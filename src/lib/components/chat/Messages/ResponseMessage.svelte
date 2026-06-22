@@ -25,6 +25,16 @@
 		user
 	} from '$lib/stores';
 	import { synthesizeOpenAISpeech } from '$lib/apis/audio';
+	import {
+		clearReadAloudSessionHandlers,
+		finishReadAloudPlayback,
+		pauseBrowserSpeechTimer,
+		registerReadAloudSessionHandlers,
+		resumeBrowserSpeechTimer,
+		setReadAloudPlayback,
+		startBrowserSpeechTimer,
+		stopReadAloud
+	} from '$lib/utils/readAloud';
 	import { imageGenerations } from '$lib/apis/images';
 	import {
 		copyToClipboard as _copyToClipboard,
@@ -205,17 +215,7 @@
 	};
 
 	const stopAudio = () => {
-		speakAbort?.abort();
-		speakAbort = null;
-
-		try {
-			speechSynthesis.cancel();
-			$audioQueue?.stop();
-		} catch {}
-
-		speaking = false;
-		speakingIdx = undefined;
-		loadingSpeech = false;
+		stopReadAloud();
 	};
 
 	// Resolve voice: model-specific > user settings > config default
@@ -234,11 +234,44 @@
 		stopAudio();
 		speakAbort = new AbortController();
 		const { signal } = speakAbort;
+		const playbackRate = $settings.audio?.tts?.playbackRate ?? 1;
 
 		speaking = true;
 		const content = removeAllDetails(message.content);
 
 		if ($config.audio.tts.engine === '') {
+			setReadAloudPlayback({
+				active: true,
+				messageId: `${message.id}`,
+				currentTime: 0,
+				totalDuration: 0,
+				isPaused: false,
+				isLoading: false,
+				seekEnabled: false
+			});
+
+			registerReadAloudSessionHandlers({
+				stop: () => {
+					speakAbort?.abort();
+					speakAbort = null;
+					speaking = false;
+					speakingIdx = undefined;
+					loadingSpeech = false;
+				},
+				pause: () => {
+					try {
+						speechSynthesis.pause();
+					} catch {}
+					pauseBrowserSpeechTimer();
+				},
+				play: () => {
+					try {
+						speechSynthesis.resume();
+					} catch {}
+					resumeBrowserSpeechTimer();
+				}
+			});
+
 			let voices = [];
 			const getVoicesLoop = setInterval(() => {
 				voices = speechSynthesis.getVoices();
@@ -247,10 +280,11 @@
 
 					const voice = voices.find((v) => v.voiceURI === getVoiceId());
 					const speech = new SpeechSynthesisUtterance(content);
-					speech.rate = $settings.audio?.tts?.playbackRate ?? 1;
+					speech.rate = playbackRate;
 
 					speech.onend = () => {
 						speaking = false;
+						finishReadAloudPlayback();
 						if ($settings.conversationMode) {
 							document.getElementById('voice-input-button')?.click();
 						}
@@ -260,15 +294,42 @@
 						speech.voice = voice;
 					}
 
+					startBrowserSpeechTimer(playbackRate);
 					speechSynthesis.speak(speech);
 				}
 			}, 100);
 		} else {
+			registerReadAloudSessionHandlers({
+				stop: () => {
+					speakAbort?.abort();
+					speakAbort = null;
+					speaking = false;
+					speakingIdx = undefined;
+					loadingSpeech = false;
+				}
+			});
+
+			setReadAloudPlayback({
+				active: true,
+				messageId: `${message.id}`,
+				currentTime: 0,
+				totalDuration: 0,
+				isPaused: false,
+				isLoading: true,
+				seekEnabled: true
+			});
+
 			$audioQueue.setId(`${message.id}`);
-			$audioQueue.setPlaybackRate($settings.audio?.tts?.playbackRate ?? 1);
-			$audioQueue.onStopped = () => {
+			$audioQueue.setPlaybackRate(playbackRate);
+			$audioQueue.onStopped = (detail) => {
 				speaking = false;
 				speakingIdx = undefined;
+				loadingSpeech = false;
+
+				if (detail.event !== 'id-change') {
+					clearReadAloudSessionHandlers();
+					finishReadAloudPlayback();
+				}
 			};
 
 			loadingSpeech = true;
@@ -281,6 +342,7 @@
 				toast.info($i18n.t('No content to speak'));
 				speaking = false;
 				loadingSpeech = false;
+				finishReadAloudPlayback();
 				return;
 			}
 
@@ -308,6 +370,7 @@
 							toast.error(`${error}`);
 							speaking = false;
 							loadingSpeech = false;
+							finishReadAloudPlayback();
 						});
 
 					if (signal.aborted) return;
@@ -327,6 +390,7 @@
 							toast.error(`${error}`);
 							speaking = false;
 							loadingSpeech = false;
+							finishReadAloudPlayback();
 						}
 					);
 
@@ -339,6 +403,10 @@
 						loadingSpeech = false;
 					}
 				}
+			}
+
+			if (!signal.aborted && speaking) {
+				setReadAloudPlayback({ isLoading: false });
 			}
 		}
 	};

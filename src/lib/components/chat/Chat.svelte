@@ -68,6 +68,7 @@
 		displayFileHandler
 	} from '$lib/utils';
 	import { AudioQueue } from '$lib/utils/audio';
+	import { stopReadAloud, syncReadAloudPlaybackFromQueue } from '$lib/utils/readAloud';
 
 	import {
 		archiveChatById,
@@ -756,10 +757,7 @@
 	}
 
 	const stopAudio = () => {
-		try {
-			speechSynthesis.cancel();
-			$audioQueue?.stop();
-		} catch {}
+		stopReadAloud();
 	};
 
 	onMount(() => {
@@ -770,7 +768,11 @@
 
 		$audioQueue?.destroy();
 
-		const audioQueueInstance = new AudioQueue(document.getElementById('audioElement'));
+		const audioElement = document.getElementById('audioElement') as HTMLAudioElement;
+		const audioQueueInstance = new AudioQueue(audioElement);
+		audioQueueInstance.onStateChange = () => {
+			syncReadAloudPlaybackFromQueue(audioQueueInstance);
+		};
 		audioQueue.set(audioQueueInstance);
 
 		// Restore direct terminal enabled states based on persisted selectedTerminalId

@@ -35,7 +35,8 @@
 		showSettings,
 		selectedTerminalId,
 		TTSWorker,
-		temporaryChatEnabled
+		temporaryChatEnabled,
+		readAloudPlayback
 	} from '$lib/stores';
 
 	import {
@@ -103,6 +104,7 @@
 	import InputModal from '../common/InputModal.svelte';
 	import Expand from '../icons/Expand.svelte';
 	import QueuedMessageItem from './MessageInput/QueuedMessageItem.svelte';
+	import ReadAloudPlayer from './MessageInput/ReadAloudPlayer.svelte';
 	import TaskList from './Messages/ResponseMessage/TaskList.svelte';
 
 	const i18n = getContext('i18n');
@@ -1291,6 +1293,10 @@
 									/>
 								{/each}
 							</div>
+						{/if}
+
+						{#if $readAloudPlayback.active}
+							<ReadAloudPlayer />
 						{/if}
 
 						<div
