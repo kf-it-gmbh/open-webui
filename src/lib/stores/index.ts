@@ -93,6 +93,7 @@ export type ReadAloudPlaybackState = {
 	isPaused: boolean;
 	isLoading: boolean;
 	seekEnabled: boolean;
+	playbackRate: number;
 };
 
 export const READ_ALOUD_PLAYBACK_DEFAULT: ReadAloudPlaybackState = {
@@ -102,7 +103,8 @@ export const READ_ALOUD_PLAYBACK_DEFAULT: ReadAloudPlaybackState = {
 	totalDuration: 0,
 	isPaused: false,
 	isLoading: false,
-	seekEnabled: true
+	seekEnabled: true,
+	playbackRate: 1
 };
 
 export const readAloudPlayback = writable<ReadAloudPlaybackState>(READ_ALOUD_PLAYBACK_DEFAULT);

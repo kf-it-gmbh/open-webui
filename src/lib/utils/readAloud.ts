@@ -20,6 +20,49 @@ let browserElapsed = 0;
 let browserStartedAt = 0;
 let browserPlaybackRate = 1;
 
+const BASE_PLAYBACK_RATES = [1, 1.25, 1.5, 1.75, 2];
+
+export function buildPlaybackRateOptions(userSetting: number): number[] {
+	if (Math.abs(userSetting - 0.5) < 0.001) {
+		return [0.5, ...BASE_PLAYBACK_RATES];
+	}
+
+	const rates = [...BASE_PLAYBACK_RATES];
+	const exists = rates.some((rate) => Math.abs(rate - userSetting) < 0.001);
+
+	if (!exists) {
+		rates.push(userSetting);
+		rates.sort((a, b) => a - b);
+	}
+
+	return rates;
+}
+
+export function formatPlaybackRateLabel(rate: number): string {
+	const normalized = Number(rate.toFixed(2));
+
+	if (Number.isInteger(normalized)) {
+		return `${normalized}x`;
+	}
+
+	return `${parseFloat(normalized.toString())}x`;
+}
+
+export function setReadAloudPlaybackRate(rate: number) {
+	browserPlaybackRate = rate;
+	get(audioQueue)?.setPlaybackRate(rate);
+	readAloudPlayback.update((current) => ({ ...current, playbackRate: rate }));
+}
+
+export function cycleReadAloudPlaybackRate(userDefaultRate: number) {
+	const currentRate = get(readAloudPlayback).playbackRate;
+	const options = buildPlaybackRateOptions(userDefaultRate);
+	const currentIndex = options.findIndex((rate) => Math.abs(rate - currentRate) < 0.001);
+	const nextIndex = currentIndex === -1 ? 0 : (currentIndex + 1) % options.length;
+
+	setReadAloudPlaybackRate(options[nextIndex]);
+}
+
 export function registerReadAloudSessionHandlers(handlers: ReadAloudSessionHandlers) {
 	sessionHandlers = handlers;
 }
