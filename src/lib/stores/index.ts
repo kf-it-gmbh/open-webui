@@ -161,6 +161,29 @@ export const visibleControls = derived(
 );
 
 export const audioQueue = writable<AudioQueue | null>(null);
+
+export type ReadAloudPlaybackState = {
+	active: boolean;
+	messageId: string | null;
+	currentTime: number;
+	totalDuration: number;
+	isPaused: boolean;
+	isLoading: boolean;
+	seekEnabled: boolean;
+};
+
+export const READ_ALOUD_PLAYBACK_DEFAULT: ReadAloudPlaybackState = {
+	active: false,
+	messageId: null,
+	currentTime: 0,
+	totalDuration: 0,
+	isPaused: false,
+	isLoading: false,
+	seekEnabled: true
+};
+
+export const readAloudPlayback = writable<ReadAloudPlaybackState>(READ_ALOUD_PLAYBACK_DEFAULT);
+
 export const chatRequestQueues: Writable<
 	Record<string, { id: string; prompt: string; files: any[]; error?: string }[]>
 > = writable({});

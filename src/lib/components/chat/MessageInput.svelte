@@ -48,7 +48,8 @@
 		chatTabRequest,
 		visibleControls,
 		imageModels,
-		videoModels
+		videoModels,
+		readAloudPlayback
 	} from '$lib/stores';
 
 	import {
@@ -136,6 +137,7 @@
 	import Skeleton from './Messages/Skeleton.svelte';
 	import Expand from '../icons/Expand.svelte';
 	import QueuedMessageItem from './MessageInput/QueuedMessageItem.svelte';
+	import ReadAloudPlayer from './MessageInput/ReadAloudPlayer.svelte';
 	import TaskList from './Messages/ResponseMessage/TaskList.svelte';
 	import { getChatContext } from '$lib/components/chat/context';
 
@@ -2251,6 +2253,10 @@
 									</div>
 								</div>
 							</div>
+						{/if}
+
+						{#if $readAloudPlayback.active}
+							<ReadAloudPlayer />
 						{/if}
 
 						<div

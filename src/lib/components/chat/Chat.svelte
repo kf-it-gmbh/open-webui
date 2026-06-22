@@ -104,6 +104,7 @@
 		getPendingAskUserFromMessage,
 		setOutputText
 	} from './Messages/structuredOutput';
+	import { stopReadAloud, syncReadAloudPlaybackFromQueue } from '$lib/utils/readAloud';
 
 	import {
 		addTagById,
@@ -2182,10 +2183,7 @@
 	};
 
 	const stopAudio = () => {
-		try {
-			speechSynthesis.cancel();
-			$audioQueue?.stop();
-		} catch {}
+		stopReadAloud();
 	};
 
 	const hasPendingAssistantLeaf = (messageId: string | null = null) =>
@@ -2252,6 +2250,9 @@
 			audioElement,
 			() => $settings.responseAutoPlayback ?? false
 		);
+		audioQueueInstance.onStateChange = () => {
+			syncReadAloudPlaybackFromQueue(audioQueueInstance);
+		};
 		audioQueue.set(audioQueueInstance);
 
 		const selectedFolderSubscribe = selectedFolder.subscribe(async (folder) => {
