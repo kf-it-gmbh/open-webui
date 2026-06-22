@@ -289,7 +289,8 @@
 				totalDuration: 0,
 				isPaused: false,
 				isLoading: false,
-				seekEnabled: false
+				seekEnabled: false,
+				playbackRate
 			});
 
 			registerReadAloudSessionHandlers({
@@ -358,7 +359,8 @@
 				totalDuration: 0,
 				isPaused: false,
 				isLoading: true,
-				seekEnabled: true
+				seekEnabled: true,
+				playbackRate
 			});
 
 			$audioQueue.setId(`${message.id}`);
