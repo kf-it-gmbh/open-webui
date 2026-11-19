@@ -137,3 +137,20 @@ build-launcher lint, formatting, CLI forwarding, and invalid-heap validation pas
 This verifies the frontend build, not a full Docker image; the previously noted
 registry/package access restrictions still prevent full image validation here.
 Docker's total memory needs exceed the heap limit and may differ on macOS/ARM64.
+
+## Public image publishing
+
+The Dockerfile supplies empty `OPENAI_API_KEY` and `WEBUI_SECRET_KEY` defaults.
+The build context excludes environment files (including nested ones), generated
+`.webui_secret_key` files, and `backend/data` contents. The signing-key exclusion
+matters when the backend has previously been run locally: `backend/start.sh`
+generates that file beside itself, and the final image copies the backend tree.
+Docker's own context filtering was verified with dummy root/nested environment
+files, signing keys, backend data, and a retained backend source fixture.
+
+Pull and rebuild before publishing an image built before these exclusions.
+This repository review cannot certify an image built on another machine with
+additional local files, custom secret-key paths, or modified build inputs.
+Secrets supplied only at container runtime and data in mounted volumes are not
+part of the original built image; publishing an image made with `docker commit`
+requires a separate review of its contents.
