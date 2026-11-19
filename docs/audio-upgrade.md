@@ -35,12 +35,13 @@ ordered sentence playback, source changes during seeking, and stale play errors.
 
 Automated checks used Node 22:
 
-- Frontend suite: 11 tests passed, including seven audio regressions.
+- Frontend suite: 24 tests passed, including seven synthesis-gap regressions
+  and 13 restored playback-control/rate tests.
 - Focused ESLint check for the audio utilities, regression tests, and player: passed.
 - Direct Svelte client compilation of all seven added/changed components: passed.
 - Upstream encryption artifact verification: passed.
 - Full type checking is not clean in upstream `v0.13.4` either (5,374 errors and
-  195 warnings in the untouched release). The final branch reports 5,368 errors
+  195 warnings in the untouched release). The audio-port validation reported 5,368 errors
   and the same 195 warnings, with no new diagnostic messages after normalizing
   checkout paths.
 - The production Vite build exceeded the 4 GiB JavaScript heap limit in this
@@ -81,3 +82,23 @@ That command-line option overrides a 4096 setting in `NODE_OPTIONS`, even if the
 commented Dockerfile environment setting is enabled. The heap limit is not a
 reservation or a limit on total process memory; the Docker attempt did not get
 far enough to measure actual frontend build memory requirements.
+
+## Development container
+
+The Node 22 frontend devcontainer and playback-control tests from commit
+`444be6dde` on `origin/krsche-player` were ported to the updated branch. The
+container forwards ports 5173, 5050, and 8080 and includes the Svelte, ESLint,
+and Prettier VS Code extensions. Setup uses the lockfile with `npm ci` and skips
+ONNX Runtime's unused CUDA download, matching the frontend Docker build.
+This is a frontend development environment; run the backend separately and set
+`WEBUI_BACKEND_URL` when it is not reachable at `http://localhost:8080` from
+inside the container.
+
+The old branch's Docker `NODE_OPTIONS=--max-old-space-size=4096` change was not
+ported, because the current build script explicitly sets its Vite heap limit.
+The Vite test configuration change was also unnecessary: the current test runner
+already discovers both the restored tests and the synthesis-gap regressions.
+
+After the devcontainer port, all 24 frontend tests and focused ESLint checks for
+the restored tests pass. The devcontainer JSON and setup settings were validated;
+the devcontainer itself was not launched.
