@@ -76,8 +76,8 @@ returned HTTP 403 for the Alpine and Debian package repositories. No final
 application image was produced. The repository Dockerfile was not modified.
 
 The earlier host-only Vite attempt explicitly used a 4 GiB Node heap limit to
-leave memory for concurrent checking and non-heap allocations. The upstream
-`npm run build` command instead explicitly sets `--max-old-space-size=12288`.
+leave memory for concurrent checking and non-heap allocations. At the time of that attempt, upstream
+`npm run build` explicitly set `--max-old-space-size=12288`.
 That command-line option overrides a 4096 setting in `NODE_OPTIONS`, even if the
 commented Dockerfile environment setting is enabled. The heap limit is not a
 reservation or a limit on total process memory; the Docker attempt did not get
@@ -95,10 +95,45 @@ This is a frontend development environment; run the backend separately and set
 inside the container.
 
 The old branch's Docker `NODE_OPTIONS=--max-old-space-size=4096` change was not
-ported, because the current build script explicitly sets its Vite heap limit.
+ported, because the upstream build script explicitly set its Vite heap limit.
+The later configurable Docker build settings below replace that fixed setting.
 The Vite test configuration change was also unnecessary: the current test runner
 already discovers both the restored tests and the synthesis-gap regressions.
 
 After the devcontainer port, all 24 frontend tests and focused ESLint checks for
 the restored tests pass. The devcontainer JSON and setup settings were validated;
 the devcontainer itself was not launched.
+
+## Configurable frontend build memory
+
+Docker builds now default to omitting source maps at generation time rather than
+creating them and optionally deleting them afterward. This reduces frontend
+build work without changing application behavior. Set
+`--build-arg BUILD_SOURCEMAP=true` to retain source maps for debugging.
+
+`BUILD_NODE_HEAP_MB` controls the Vite process's JavaScript heap limit, in MiB.
+The build launcher replaces the fixed upstream command-line value so that this
+setting actually reaches Node. Local builds retain upstream's 12288 MiB default;
+Docker defaults to 5120 MiB (5 GiB), which completed the Vite production build
+on this 7.7 GiB Linux host with source maps disabled. For example:
+
+```sh
+docker build --progress=plain \
+  --build-arg BUILD_NODE_HEAP_MB=5120 \
+  --build-arg BUILD_SOURCEMAP=false \
+  -t krsche/open-webui:v0.13.4-krsche-player .
+```
+
+The heap is only part of the build's total memory use. Docker may also build the
+backend stage in parallel. On macOS, check the Linux VM's allocation with
+`docker info --format '{{.MemTotal}}'`; the Mac's physical RAM is not necessarily
+all available to Docker. `Killed` / `cannot allocate memory` indicates resource
+exhaustion; Rollup annotation and Svelte accessibility warnings are separate.
+
+Validation of these settings: the Vite production build completed and the static
+adapter wrote `build/` using Node 22, a 5120 MiB heap, and source maps disabled.
+The 4096 MiB attempt still exhausted the JavaScript heap. All 24 frontend tests,
+build-launcher lint, formatting, CLI forwarding, and invalid-heap validation pass.
+This verifies the frontend build, not a full Docker image; the previously noted
+registry/package access restrictions still prevent full image validation here.
+Docker's total memory needs exceed the heap limit and may differ on macOS/ARM64.

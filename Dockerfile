@@ -32,9 +32,6 @@ ARG USE_SLIM
 ARG UID
 ARG GID
 
-# Set Node.js options (heap limit Allocation failed - JavaScript heap out of memory)
-# ENV NODE_OPTIONS="--max-old-space-size=4096"
-
 WORKDIR /app
 
 # to store git revision in build
@@ -47,7 +44,11 @@ RUN ONNXRUNTIME_NODE_INSTALL_CUDA=skip npm ci --force
 COPY . .
 ENV APP_BUILD_HASH=${BUILD_HASH}
 ENV APP_BUILD_CHANNEL=${BUILD_CHANNEL}
-RUN npm run build && \
+# Keep build settings configurable without reinstalling dependencies. Source maps
+# consume substantial build memory and are not needed to run the application.
+ARG BUILD_NODE_HEAP_MB=5120
+ARG BUILD_SOURCEMAP=false
+RUN BUILD_NODE_HEAP_MB="$BUILD_NODE_HEAP_MB" BUILD_SOURCEMAP="$BUILD_SOURCEMAP" npm run build && \
     if [ "$USE_SLIM" = "true" ]; then find build -type f -name '*.map' -delete; fi
 
 # Prepare backend ownership before the final copy so static assets occupy one layer.
