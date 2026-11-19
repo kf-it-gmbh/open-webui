@@ -56,6 +56,8 @@ Then open [http://localhost:8080](http://localhost:8080).
 
 #### Docker
 
+For this fork's image build and publishing commands, including Apple Silicon to amd64 builds, see [Building and publishing this fork](docs/docker-build.md).
+
 ```bash
 docker run -d -p 3000:8080 --add-host=host.docker.internal:host-gateway -v open-webui:/app/backend/data --name open-webui --restart always ghcr.io/open-webui/open-webui:main
 ```

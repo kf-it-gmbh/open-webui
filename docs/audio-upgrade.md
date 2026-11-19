@@ -1,5 +1,7 @@
 # Open WebUI 0.13.4 audio port
 
+For reusable Docker commands, see [Building and publishing this fork](docker-build.md).
+
 The base is upstream tag `v0.13.4` (`0666e59d26a4d056e0bacee41742486badd71cf8`),
 confirmed as the latest release on November 19, 2026.
 See https://github.com/open-webui/open-webui/releases/tag/v0.13.4.
