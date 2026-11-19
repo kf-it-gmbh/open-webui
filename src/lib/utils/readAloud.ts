@@ -103,7 +103,9 @@ export function stopReadAloud() {
 
 	try {
 		speechSynthesis.cancel();
-	} catch {}
+	} catch {
+		// Speech synthesis is not available in every browser.
+	}
 
 	get(audioQueue)?.stop();
 	resetReadAloudPlayback();

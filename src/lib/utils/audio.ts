@@ -20,6 +20,10 @@ export class AudioQueue {
 	private chunks: AudioChunk[] = [];
 	private currentIndex = -1;
 	private userPaused = false;
+	private generating = false;
+	private waiting = false;
+	private pendingOffset: number | null = null;
+	private loadVersion = 0;
 	private readonly _onGesture = () => this.#unlock();
 	private readonly _onEnded = () => this.#onEnded();
 	private readonly _onTimeUpdate = () => this.#notifyStateChange();
@@ -29,7 +33,10 @@ export class AudioQueue {
 	onStopped: OnStoppedCallback | null = null;
 	onStateChange: (() => void) | null = null;
 
-	constructor(audioElement: HTMLAudioElement, private isAutoPlaybackEnabled: () => boolean) {
+	constructor(
+		audioElement: HTMLAudioElement,
+		private isAutoPlaybackEnabled: () => boolean
+	) {
 		this.audio = audioElement;
 		document.addEventListener('pointerdown', this._onGesture, true);
 		document.addEventListener('keydown', this._onGesture, true);
@@ -49,8 +56,19 @@ export class AudioQueue {
 
 	setPlaybackRate(rate: number) {
 		this.audio.defaultPlaybackRate = rate;
-		this.audio.defaultPlaybackRate = rate;
 		this.audio.playbackRate = rate;
+	}
+
+	// A temporarily empty queue is not the end of a response while TTS is generating.
+	beginGeneration() {
+		this.generating = true;
+	}
+
+	endGeneration() {
+		this.generating = false;
+		if ((this.waiting && this.currentIndex + 1 >= this.chunks.length) || this.chunks.length === 0) {
+			this.#finish();
+		}
 	}
 
 	enqueue(url: string) {
@@ -58,6 +76,8 @@ export class AudioQueue {
 
 		if (this.currentIndex === -1 && !this.userPaused) {
 			this.#loadChunk(0);
+		} else if (this.waiting && !this.userPaused) {
+			this.#loadChunk(this.currentIndex + 1);
 		}
 
 		this.#notifyStateChange();
@@ -90,7 +110,11 @@ export class AudioQueue {
 			return;
 		}
 
-		this.audio.play().catch(() => {});
+		if (this.waiting) {
+			if (this.currentIndex + 1 < this.chunks.length) this.#loadChunk(this.currentIndex + 1);
+		} else {
+			this.#playCurrent();
+		}
 		this.#notifyStateChange();
 	}
 
@@ -109,7 +133,11 @@ export class AudioQueue {
 		);
 		const { index, offset } = this.#resolveTimeToPosition(targetTime);
 
-		if (index === this.currentIndex && this.audio.src === this.chunks[index]?.url) {
+		if (
+			index === this.currentIndex &&
+			!this.waiting &&
+			this.audio.src === this.chunks[index]?.url
+		) {
 			this.audio.currentTime = offset;
 		} else {
 			this.#loadChunk(index, offset);
@@ -134,7 +162,7 @@ export class AudioQueue {
 	}
 
 	isPaused(): boolean {
-		return this.userPaused || this.audio.paused;
+		return this.userPaused || (!this.waiting && this.audio.paused);
 	}
 
 	isActive(): boolean {
@@ -158,7 +186,7 @@ export class AudioQueue {
 	}
 
 	#onEnded() {
-		if (this.userPaused) return;
+		if (this.userPaused || this.currentIndex < 0 || this.waiting) return;
 
 		const nextIndex = this.currentIndex + 1;
 		if (nextIndex < this.chunks.length) {
@@ -166,6 +194,12 @@ export class AudioQueue {
 			return;
 		}
 
+		this.waiting = true;
+		if (!this.generating) this.#finish();
+		this.#notifyStateChange();
+	}
+
+	#finish() {
 		this.#halt(false);
 		this.onStopped?.({ event: 'empty-queue', id: this.id });
 		this.#notifyStateChange();
@@ -176,37 +210,36 @@ export class AudioQueue {
 		if (chunk && Number.isFinite(this.audio.duration)) {
 			chunk.duration = this.audio.duration;
 		}
+		if (this.pendingOffset !== null && chunk) {
+			this.audio.currentTime = this.pendingOffset;
+			this.pendingOffset = null;
+		}
 		this.#notifyStateChange();
+	}
+
+	#playCurrent() {
+		const version = this.loadVersion;
+		this.audio.muted = false;
+		this.audio.play().catch((error) => {
+			if (version !== this.loadVersion || this.userPaused) return;
+			console.error(error);
+			this.#halt(false);
+			this.onStopped?.({ event: 'error', id: this.id });
+			this.#notifyStateChange();
+		});
 	}
 
 	#loadChunk(index: number, offset = 0) {
 		const chunk = this.chunks[index];
 		if (!chunk) return;
 
+		this.loadVersion++;
+		this.waiting = false;
 		this.currentIndex = index;
+		this.pendingOffset = offset;
 		this.audio.src = chunk.url;
-
-		const applyOffset = () => {
-			if (Number.isFinite(this.audio.duration)) {
-				chunk.duration = this.audio.duration;
-			}
-			this.audio.currentTime = offset;
-			this.#notifyStateChange();
-		};
-
-		if (this.audio.readyState >= 1) {
-			applyOffset();
-		} else {
-			const onMeta = () => {
-				this.audio.removeEventListener('loadedmetadata', onMeta);
-				applyOffset();
-			};
-			this.audio.addEventListener('loadedmetadata', onMeta);
-		}
-
-		if (!this.userPaused) {
-			this.audio.play().catch(() => {});
-		}
+		if (this.audio.readyState >= 1) this.#onLoadedMetadata();
+		if (!this.userPaused) this.#playCurrent();
 
 		this.#notifyStateChange();
 	}
@@ -252,6 +285,10 @@ export class AudioQueue {
 	}
 
 	#halt(fireStateChange: boolean) {
+		this.loadVersion++;
+		this.pendingOffset = null;
+		this.generating = false;
+		this.waiting = false;
 		this.audio.pause();
 		this.audio.currentTime = 0;
 		this.audio.removeAttribute('src');

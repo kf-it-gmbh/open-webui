@@ -315,8 +315,12 @@
 				}
 			});
 
-			let voices = [];
+			let voices: SpeechSynthesisVoice[] = [];
 			const getVoicesLoop = setInterval(() => {
+				if (signal.aborted) {
+					clearInterval(getVoicesLoop);
+					return;
+				}
 				voices = speechSynthesis.getVoices();
 				if (voices.length > 0) {
 					clearInterval(getVoicesLoop);
@@ -326,6 +330,7 @@
 					speech.rate = playbackRate;
 
 					speech.onend = () => {
+						if (signal.aborted) return;
 						speaking = false;
 						finishReadAloudPlayback();
 						if ($settings.conversationMode) {
@@ -342,6 +347,11 @@
 				}
 			}, 100);
 		} else {
+			const queue = $audioQueue;
+			if (!queue) {
+				speaking = false;
+				return;
+			}
 			registerReadAloudSessionHandlers({
 				stop: () => {
 					speakAbort?.abort();
@@ -363,11 +373,10 @@
 				playbackRate
 			});
 
-			$audioQueue.setId(`${message.id}`);
-			$audioQueue.setPlaybackRate(playbackRate);
-			let synthesizing = true;
-			$audioQueue.onStopped = (detail) => {
-				if (detail.event === 'empty-queue' && synthesizing) return;
+			queue.setId(`${message.id}`);
+			queue.setPlaybackRate(playbackRate);
+			queue.beginGeneration();
+			queue.onStopped = (detail) => {
 				if (detail.event === 'error') {
 					speakAbort?.abort();
 					toast.error($i18n.t('Audio playback failed'));
@@ -399,67 +408,45 @@
 			const voiceId = getVoiceId();
 			console.debug('Prepared message content for TTS', messageContentParts, 'voice:', voiceId);
 
-			if ($settings.audio?.tts?.engine === 'browser-kokoro') {
-				if (!$TTSWorker) {
-					await TTSWorker.set(
-						new KokoroWorker({
-							dtype: $settings.audio?.tts?.engineConfig?.dtype ?? 'fp32'
-						})
-					);
+			try {
+				if ($settings.audio?.tts?.engine === 'browser-kokoro') {
+					if (!$TTSWorker) {
+						await TTSWorker.set(
+							new KokoroWorker({ dtype: $settings.audio?.tts?.engineConfig?.dtype ?? 'fp32' })
+						);
+						await $TTSWorker.init();
+					}
 
-					await $TTSWorker.init();
-				}
-
-				for (const [, sentence] of messageContentParts.entries()) {
-					if (signal.aborted) return;
-					if (!speaking) break;
-
-					const url = await $TTSWorker
-						.generate({ text: sentence, voice: voiceId })
-						.catch((error) => {
-							console.error(error);
-							toast.error(`${error}`);
-							speaking = false;
-							loadingSpeech = false;
-							finishReadAloudPlayback();
-						});
-
-					if (signal.aborted) return;
-
-					if (url && speaking) {
-						$audioQueue.enqueue(url);
+					for (const sentence of messageContentParts) {
+						if (signal.aborted) return;
+						const url = await $TTSWorker.generate({ text: sentence, voice: voiceId });
+						if (signal.aborted) return;
+						if (url) queue.enqueue(url);
 						loadingSpeech = false;
 					}
-				}
-			} else {
-				for (const [, sentence] of messageContentParts.entries()) {
-					if (signal.aborted) return;
-					if (!speaking) break;
-
-					const res = await synthesizeOpenAISpeech(localStorage.token, voiceId, sentence).catch(
-						(error) => {
-							console.error(error);
-							toast.error(`${error}`);
-							speaking = false;
+				} else {
+					for (const sentence of messageContentParts) {
+						if (signal.aborted) return;
+						const res = await synthesizeOpenAISpeech(localStorage.token, voiceId, sentence);
+						if (signal.aborted) return;
+						if (res) {
+							const blob = await res.blob();
+							if (signal.aborted) return;
+							queue.enqueue(URL.createObjectURL(blob));
 							loadingSpeech = false;
-							finishReadAloudPlayback();
 						}
-					);
-
-					if (signal.aborted) return;
-
-					if (res && speaking) {
-						const blob = await res.blob();
-						const url = URL.createObjectURL(blob);
-						$audioQueue.enqueue(url);
-						loadingSpeech = false;
 					}
 				}
-			}
-
-			synthesizing = false;
-			if (!signal.aborted && speaking) {
-				setReadAloudPlayback({ isLoading: false });
+			} catch (error) {
+				if (signal.aborted) return;
+				console.error(error);
+				toast.error(`${error}`);
+				stopReadAloud();
+			} finally {
+				if (!signal.aborted) {
+					queue.endGeneration();
+					setReadAloudPlayback({ isLoading: false });
+				}
 			}
 		}
 	};
