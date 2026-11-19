@@ -1,5 +1,5 @@
 import { sveltekit } from '@sveltejs/kit/vite';
-import { defineConfig } from 'vite';
+import { defineConfig } from 'vitest/config';
 
 import { viteStaticCopy } from 'vite-plugin-static-copy';
 
@@ -16,6 +16,9 @@ export default defineConfig({
 			]
 		})
 	],
+	test: {
+		include: ['src/**/*.{test,spec}.{js,ts}']
+	},
 	define: {
 		APP_VERSION: JSON.stringify(process.env.npm_package_version),
 		APP_BUILD_HASH: JSON.stringify(process.env.APP_BUILD_HASH || 'dev-build')

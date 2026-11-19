@@ -1,0 +1,33 @@
+{
+	"name": "Open WebUI (Node 22)",
+	"image": "mcr.microsoft.com/devcontainers/javascript-node:22",
+	"remoteUser": "node",
+	"forwardPorts": [5173, 5050, 8080],
+	"portsAttributes": {
+		"5173": {
+			"label": "Vite dev server",
+			"onAutoForward": "notify"
+		},
+		"5050": {
+			"label": "Vite dev server (5050)",
+			"onAutoForward": "notify"
+		},
+		"8080": {
+			"label": "Open WebUI backend",
+			"onAutoForward": "silent"
+		}
+	},
+	"postCreateCommand": "npm install --force",
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"svelte.svelte-vscode",
+				"dbaeumer.vscode-eslint",
+				"esbenp.prettier-vscode"
+			],
+			"settings": {
+				"terminal.integrated.defaultProfile.linux": "bash"
+			}
+		}
+	}
+}
